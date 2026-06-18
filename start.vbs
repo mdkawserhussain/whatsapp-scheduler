@@ -14,7 +14,16 @@ Dim sFolder
 sFolder = Left(WScript.ScriptFullName, InStrRev(WScript.ScriptFullName, "\"))
 oShell.CurrentDirectory = sFolder
 
-' Run node index.js with window hidden (0 = no window, False = don't wait)
-oShell.Run "node index.js", 0, False
+' Run with auto-restart on crash (max 5 retries, 30s delay)
+Dim maxRetries, retryCount
+maxRetries = 5
+retryCount = 0
+
+Do
+    oShell.Run "node index.js", 0, True
+    retryCount = retryCount + 1
+    If retryCount >= maxRetries Then Exit Do
+    WScript.Sleep 30000
+Loop
 
 Set oShell = Nothing

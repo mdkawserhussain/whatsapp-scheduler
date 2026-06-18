@@ -11,6 +11,8 @@ class Logger {
     this.timezone = opts.timezone || 'Asia/Dhaka';
     this.level    = LEVELS[opts.level] ?? 1;
     this.maxSize  = opts.maxSize || 5 * 1024 * 1024; // 5 MB
+    this._writeCount = 0;
+    this._rotateEvery = 100;
   }
 
   _ts() {
@@ -31,9 +33,14 @@ class Logger {
     const line = `[${this._ts()}] ${level.toUpperCase()} ${msg}`;
     console.log(line);
     try {
-      this._rotate();
+      this._writeCount++;
+      if (this._writeCount % this._rotateEvery === 0) {
+        this._rotate();
+      }
       fs.appendFileSync(this.logFile, line + '\n');
-    } catch (_) {}
+    } catch (writeErr) {
+      console.error(`[Logger] Write failed: ${writeErr.message}`);
+    }
   }
 
   debug(msg) { this._write('debug', msg); }

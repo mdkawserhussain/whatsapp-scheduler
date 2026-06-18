@@ -4,5 +4,7 @@ node_modules/
 scheduler.log
 *.mp3
 .tts-*
+.tts-input.txt
+.tts-output.mp3
 voice.ogg
 ai-dev-tasks/

@@ -1,13 +1,18 @@
 'use strict';
 
-const fs   = require('fs');
-const path = require('path');
+const fs    = require('fs');
+const path  = require('path');
+const cron  = require('node-cron');
+const CONFIG = require('./config');
 
 function validate(logger) {
   const checks = [
     {
       name: 'Node.js version',
-      ok: () => process.version >= 'v18',
+      ok: () => {
+        const major = parseInt(process.version.slice(1), 10);
+        return Number.isFinite(major) && major >= 18;
+      },
       msg: `Node.js ≥ 18 required (current: ${process.version})`,
     },
     {
@@ -17,9 +22,7 @@ function validate(logger) {
     },
     {
       name: 'Target phone',
-      ok: () => {
-        try { return require('./config').target !== '8801XXXXXXXXX@c.us'; } catch (_) { return false; }
-      },
+      ok: () => CONFIG.target !== '8801XXXXXXXXX@c.us',
       msg: 'Target phone still placeholder — edit .env',
     },
     {
@@ -33,11 +36,22 @@ function validate(logger) {
     },
     {
       name: 'Voice file',
-      ok: () => {
-        try { return fs.existsSync(require('./config').voiceFile); } catch (_) { return false; }
-      },
+      ok: () => fs.existsSync(CONFIG.voiceFile),
       msg: 'voice.ogg not found — optional, voice sends will be skipped',
       warn: true,
+    },
+    {
+      name: 'Cron expressions',
+      ok: () => {
+        return Object.entries(CONFIG.schedules).every(([key, expr]) => {
+          if (!cron.validate(expr)) {
+            logger.error(`  ❌ Invalid cron for ${key}: "${expr}"`);
+            return false;
+          }
+          return true;
+        });
+      },
+      msg: 'Invalid cron expression in .env — check schedule format',
     },
   ];
 

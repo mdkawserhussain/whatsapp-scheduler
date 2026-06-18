@@ -211,6 +211,7 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 process.on('uncaughtException', (err) => {
   log(`💥 Uncaught exception: ${err.message}\n${err.stack}`);
+  process.exit(1);
 });
 process.on('unhandledRejection', (reason) => {
   log(`💥 Unhandled rejection: ${reason}`);

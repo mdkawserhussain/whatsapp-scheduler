@@ -15,7 +15,7 @@ class TelegramNotifier {
     if (!this.enabled) return;
     const url = `${TELEGRAM_API}/bot${this.botToken}/sendMessage`;
     const body = JSON.stringify({
-      chat_id: this.chatId,
+      chat_id: Number(this.chatId) || this.chatId,
       text:    message,
       parse_mode: 'HTML',
     });

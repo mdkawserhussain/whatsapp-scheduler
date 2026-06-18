@@ -14,8 +14,4 @@ function loadMessage(filename) {
   return fs.readFileSync(filePath, 'utf-8').trim();
 }
 
-function fillTemplate(template, data) {
-  return template.replace(/\{(\w+)\}/g, (_, key) => data[key] ?? `{${key}}`);
-}
-
-module.exports = { loadMessage, fillTemplate, MESSAGES_DIR };
+module.exports = { loadMessage, MESSAGES_DIR };

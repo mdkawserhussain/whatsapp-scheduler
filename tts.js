@@ -41,11 +41,11 @@ function generate(text) {
           '-c:a', 'libopus', '-b:a', '32k', '-ac', '1',
           OUTPUT_FILE,
         ], { timeout: 15000 }, (convErr) => {
-          try { fs.unlinkSync(mp3File); } catch (_) {}
           if (convErr) {
             // ffmpeg failed — keep MP3 as fallback
             try { fs.copyFileSync(mp3File, OUTPUT_FILE); } catch (_) {}
           }
+          try { fs.unlinkSync(mp3File); } catch (_) {}
           resolve(OUTPUT_FILE);
         });
       } catch (_) {
