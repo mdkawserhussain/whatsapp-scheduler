@@ -22,9 +22,12 @@ Fire-and-forget WhatsApp scheduler for sending daily accounting notices. Set it 
 - **4 daily messages**: 09:30 text, 10:00 voice, 14:00 text, 14:30 voice
 - **Auto-reconnect**: Exponential backoff on disconnects
 - **Anti-ban jitter**: Random 0-120s delay on sends
-- **Holiday skip**: Skips Bangladesh national holidays
+- **Holiday skip**: Skips Bangladesh national holidays (2025-2030)
 - **Editable templates**: Change messages without touching code
+- **Voice fallback chain**: OGG → MP3 → Edge-TTS auto-generation
 - **Telegram alerts**: Optional notifications on send success/failure
+- **Startup validation**: Catches misconfiguration before first send
+- **Crash recovery**: VBS launcher auto-restarts on crash (5 retries)
 - **Structured logging**: With file rotation and log levels
 
 ## Quick Start
@@ -61,6 +64,15 @@ All settings are in `.env`. Copy `.env.example` to get started.
 | `LOG_LEVEL` | No | `info` | Log level: debug/info/warn/error |
 | `LOG_FILE` | No | `scheduler.log` | Log file path |
 
+### Startup Validation
+
+On every start, the system checks:
+- Node.js version ≥ 18
+- `.env` exists and phone number is not placeholder
+- All 4 message templates exist in `messages/`
+- Cron expressions are valid
+- Voice file exists (warning only — not blocking)
+
 ## Message Templates
 
 Messages are stored in `messages/*.txt` — edit these files to change what gets sent.
@@ -68,48 +80,59 @@ Messages are stored in `messages/*.txt` — edit these files to change what gets
 | File | Schedule | Purpose |
 |------|----------|---------|
 | `morning-text.txt` | 09:30 | Full accounting notice |
-| `morning-voice.txt` | 10:00 | Short voice reminder |
+| `morning-voice.txt` | 10:00 | Voice generation source text |
 | `afternoon-text.txt` | 14:00 | Afternoon check-in |
-| `afternoon-voice.txt` | 14:30 | Evening reminder |
+| `afternoon-voice.txt` | 14:30 | Voice generation source text |
 
-### Placeholders
-
-Use `{variable}` in templates. Available variables:
-- `{yesterday}` — Yesterday's date
-- `{today}` — Today's date
-- `{tomorrow}` — Tomorrow's date
+**Note:** Templates are loaded once at startup. Edit a file → restart the scheduler to apply.
 
 ## Voice Notes
 
-### Option A: Pre-recorded file
+The system uses a **fallback chain** — it tries each option in order until one works:
 
-Place `voice.ogg` (OGG/Opus format) in the project folder.
+```
+1. voice.ogg exists?  → use it directly
+2. voice.mp3 exists?  → convert to .ogg via ffmpeg, use it
+                       → if ffmpeg fails, use .mp3 directly
+3. Neither?           → generate via Edge-TTS (if installed)
+                       → uses text from morning-voice.txt
+4. All fail?          → skip voice send, log error
+```
+
+### Option A: Place a pre-recorded file
 
 ```bash
-# Convert MP3 to OGG/Opus
+# OGG/Opus (preferred — WhatsApp native format)
 ffmpeg -i input.mp3 -c:a libopus -b:a 32k -ac 1 voice.ogg
+
+# Or just place voice.mp3 — it auto-converts
 ```
 
 ### Option B: Generate with Edge-TTS (free)
 
 ```bash
-# Install edge-tts
+# Install edge-tts (Python)
 pip install edge-tts
 
-# Generate voice file
+# Generate voice.ogg from morning-voice.txt
 node generate-voice.js
 ```
+
+### Option C: Do nothing
+
+If no voice file exists and Edge-TTS is installed, the system auto-generates one on first voice send.
 
 ## Anti-Ban Features
 
 - **Random jitter**: 0-120s delay before each send
-- **Holiday skip**: Automatically skips Bangladesh national holidays
+- **Holiday skip**: Automatically skips Bangladesh national holidays (2025-2030)
 - **Dynamic messages**: Edit templates to vary content
 - **Exponential backoff**: On reconnect, waits 10s → 20s → 40s → ... → 300s max
+- **Startup validation**: Catches invalid config before first cron fire
 
 ### Holidays
 
-Edit `holidays.json` to add/remove holidays:
+Edit `holidays.json` to add/remove holidays. Current coverage: 2025-2030.
 
 ```json
 {
@@ -133,14 +156,15 @@ Edit `holidays.json` to add/remove holidays:
 Logs are written to both console and `scheduler.log`.
 
 - **Log levels**: debug, info, warn, error
-- **Rotation**: Auto-rotates at 5MB
+- **Rotation**: Auto-rotates at 5MB (checked every 100 writes)
 - **Format**: `[date] LEVEL message`
+- **Write errors**: Surfaced to console (not silently swallowed)
 
 ## Running as a Service
 
-### Option A: VBS background launcher
+### Option A: VBS background launcher (recommended)
 
-Double-click `start.vbs` — runs invisibly in background.
+Double-click `start.vbs` — runs invisibly in background with auto-restart (5 retries, 30s delay between crashes).
 
 ### Option B: Windows Startup
 
@@ -162,33 +186,36 @@ pm2 startup
 |---------|----------|
 | QR code not appearing | Delete `.wwebjs_auth/` and restart |
 | "Client not ready" | Wait for "✅ WhatsApp client ready" in logs |
-| Voice file not found | Place `voice.ogg` in project folder |
+| Voice file not found | Place `voice.ogg` or `voice.mp3`, or install Edge-TTS |
 | Cron not firing | Check `.env` schedule format and timezone |
 | Session expired | Delete `.wwebjs_auth/`, restart, re-scan QR |
+| `MODULE_NOT_FOUND` | Run `npm install` |
+| "Target phone still placeholder" | Edit `.env` and set real phone number |
 
 ## File Structure
 
 ```
 whatsapp-scheduler/
-├── index.js              # Main scheduler
+├── index.js              # Main scheduler + voice fallback chain
 ├── config.js             # Config loader (.env)
 ├── templates.js          # Message template loader
-├── logger.js             # Structured logging
+├── logger.js             # Structured logging with rotation
 ├── notifications.js      # Telegram notifications
-├── validate.js           # Startup validation
-├── tts.js                # Edge-TTS wrapper
-├── generate-voice.js     # Voice generation script
+├── validate.js           # Startup validation (Node, deps, config, cron)
+├── tts.js                # Edge-TTS wrapper (MP3 → OGG conversion)
+├── generate-voice.js     # One-time voice generation script
+├── package.json          # Dependencies (4 packages)
 ├── .env                  # Your settings (git-ignored)
 ├── .env.example          # Template settings
-├── holidays.json         # Bangladesh holidays
+├── holidays.json         # Bangladesh holidays (2025-2030)
 ├── messages/             # Editable message templates
 │   ├── morning-text.txt
 │   ├── morning-voice.txt
 │   ├── afternoon-text.txt
 │   └── afternoon-voice.txt
-├── voice.ogg             # Voice note file
+├── voice.ogg             # Voice note (auto-generated if missing)
 ├── scheduler.log         # Log file (auto-generated)
 ├── setup.bat             # One-click setup
-├── start.vbs             # Silent background launcher
+├── start.vbs             # Silent launcher with crash recovery
 └── .wwebjs_auth/         # WhatsApp session (git-ignored)
 ```

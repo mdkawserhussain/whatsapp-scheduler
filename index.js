@@ -125,6 +125,54 @@ function jitter(ms) {
   return new Promise(resolve => setTimeout(resolve, delay));
 }
 
+async function resolveVoiceFile() {
+  const oggPath = CONFIG.voiceFile;
+  const mp3Path = oggPath.replace(/\.ogg$/i, '.mp3');
+  const ttsText = TEMPLATES.morningVoice;
+
+  // 1. OGG exists → use it
+  if (fs.existsSync(oggPath)) {
+    log('   Using voice.ogg');
+    return oggPath;
+  }
+
+  // 2. MP3 exists → convert to OGG
+  if (fs.existsSync(mp3Path)) {
+    log('   voice.ogg not found, converting voice.mp3 → voice.ogg…');
+    const { execFile } = require('child_process');
+    await new Promise((resolve) => {
+      execFile('ffmpeg', ['-y', '-i', mp3Path, '-c:a', 'libopus', '-b:a', '32k', '-ac', '1', oggPath],
+        { timeout: 15000 }, (err) => resolve(!err));
+    });
+    if (fs.existsSync(oggPath)) {
+      log('   ✅ Conversion successful.');
+      return oggPath;
+    }
+    log('   ⚠️  ffmpeg conversion failed, using MP3 as fallback.');
+    return mp3Path;
+  }
+
+  // 3. Neither exists → generate via edge-tts
+  if (ttsText) {
+    log('   No voice file found — generating via Edge-TTS…');
+    const tts = require('./tts');
+    const available = await tts.isAvailable();
+    if (available) {
+      try {
+        const outFile = await tts.generate(ttsText);
+        log('   ✅ Voice file generated.');
+        return outFile;
+      } catch (err) {
+        log(`   ❌ TTS generation failed: ${err.message}`);
+      }
+    } else {
+      log('   ❌ edge-tts not available. Install: pip install edge-tts');
+    }
+  }
+
+  return null;
+}
+
 // ┌─────────────────────────────────────────────────────────────────┐
 // │  SEND HELPERS                                                    │
 // └─────────────────────────────────────────────────────────────────┘
@@ -162,14 +210,14 @@ async function sendVoice(templateName) {
     log(`🎌 Holiday — skipping ${templateName}.`);
     return;
   }
-  if (!fs.existsSync(CONFIG.voiceFile)) {
-    log(`❌ Voice file not found: ${CONFIG.voiceFile}`);
-    log('   Place voice.ogg (OGG/Opus format) in the project folder.');
+  const voicePath = await resolveVoiceFile();
+  if (!voicePath) {
+    log('❌ No voice file available — skipping voice send.');
     return;
   }
   await jitter(120000); // 0-120s random delay
   try {
-    const media = MessageMedia.fromFilePath(CONFIG.voiceFile);
+    const media = MessageMedia.fromFilePath(voicePath);
     await client.sendMessage(CONFIG.target, media, { sendAudioAsVoice: true });
     log(`🎙️  ${templateName} sent successfully.`);
     await notifier.send(`✅ ${templateName} sent successfully.`);
