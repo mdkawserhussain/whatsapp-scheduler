@@ -1,0 +1,8 @@
+node_modules/
+.wwebjs_auth/
+.env
+scheduler.log
+*.mp3
+.tts-*
+voice.ogg
+ai-dev-tasks/
