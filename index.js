@@ -86,7 +86,7 @@ client.on('auth_failure', (msg) => {
 
 client.on('ready', () => {
   log('✅ WhatsApp client ready.');
-  log(`   Target: ${CONFIG.target}`);
+  log(`   Targets: ${CONFIG.targets.join(', ')}`);
   log(`   Timezone: ${CONFIG.timezone}`);
   clientReady = true;
   if (!cronRegistered) {
@@ -190,15 +190,16 @@ async function sendText(templateName) {
     log(`⚠️  No template loaded for ${templateName} — skipping.`);
     return;
   }
-  await jitter(120000); // 0-120s random delay
-  try {
-    await client.sendMessage(CONFIG.target, msg);
-    log(`📨 ${templateName} sent successfully.`);
-    await notifier.send(`✅ ${templateName} sent successfully.`);
-  } catch (err) {
-    log(`❌ ${templateName} send failed: ${err.message}`);
-    await notifier.send(`❌ ${templateName} failed: ${err.message}`);
+  for (const target of CONFIG.targets) {
+    await jitter(120000); // 0-120s random delay
+    try {
+      await client.sendMessage(target, msg);
+      log(`📨 ${templateName} sent to ${target}.`);
+    } catch (err) {
+      log(`❌ ${templateName} send to ${target} failed: ${err.message}`);
+    }
   }
+  await notifier.send(`✅ ${templateName} sent to ${CONFIG.targets.length} recipient(s).`);
 }
 
 async function sendVoice(templateName) {
@@ -215,16 +216,17 @@ async function sendVoice(templateName) {
     log('❌ No voice file available — skipping voice send.');
     return;
   }
-  await jitter(120000); // 0-120s random delay
-  try {
-    const media = MessageMedia.fromFilePath(voicePath);
-    await client.sendMessage(CONFIG.target, media, { sendAudioAsVoice: true });
-    log(`🎙️  ${templateName} sent successfully.`);
-    await notifier.send(`✅ ${templateName} sent successfully.`);
-  } catch (err) {
-    log(`❌ ${templateName} send failed: ${err.message}`);
-    await notifier.send(`❌ ${templateName} failed: ${err.message}`);
+  for (const target of CONFIG.targets) {
+    await jitter(120000); // 0-120s random delay
+    try {
+      const media = MessageMedia.fromFilePath(voicePath);
+      await client.sendMessage(target, media, { sendAudioAsVoice: true });
+      log(`🎙️  ${templateName} sent to ${target}.`);
+    } catch (err) {
+      log(`❌ ${templateName} send to ${target} failed: ${err.message}`);
+    }
   }
+  await notifier.send(`✅ ${templateName} sent to ${CONFIG.targets.length} recipient(s).`);
 }
 
 // ┌─────────────────────────────────────────────────────────────────┐
@@ -235,7 +237,7 @@ function registerCronJobs() {
 
   cron.schedule(CONFIG.schedules.morningText,    () => sendText('morningText'),    opts);
   cron.schedule(CONFIG.schedules.morningVoice,   () => sendVoice('morningVoice'),   opts);
-  cron.schedule(CONFIG.schedules.afternoonText,  () => sendText('afternoonText'),  opts);
+  cron.schedule(CONFIG.schedules.afternoonText,  () => sendText('morningText'),  opts);
   cron.schedule(CONFIG.schedules.afternoonVoice, () => sendVoice('afternoonVoice'), opts);
 
   log('📅 Active schedules (Asia/Dhaka / BST):');

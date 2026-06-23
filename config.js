@@ -14,13 +14,19 @@ for (const key of required) {
   }
 }
 
+const targets = process.env.TARGET_PHONE.split(',').map(t => t.trim()).filter(Boolean);
+if (targets.length === 0) {
+  console.error('❌ TARGET_PHONE is empty — provide at least one phone number.');
+  process.exit(1);
+}
+
 const holidaysPath = path.join(__dirname, 'holidays.json');
 const holidays = fs.existsSync(holidaysPath)
   ? Object.keys(JSON.parse(fs.readFileSync(holidaysPath, 'utf-8')))
   : [];
 
 module.exports = {
-  target:    process.env.TARGET_PHONE,
+  targets,
   timezone:  process.env.TIMEZONE || 'Asia/Dhaka',
   voiceFile: path.join(__dirname, process.env.VOICE_FILE || 'voice.ogg'),
   logLevel:  process.env.LOG_LEVEL || 'info',
